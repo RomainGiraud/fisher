@@ -1,96 +1,66 @@
 import pyautogui
-import pyscreeze
 import cv2
 import numpy as np
 from PIL import ImageGrab
+import keyboard
 
 import os
 import pathlib
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 import utils
-
-def main():
-    # pyautogui.alert(text='Hello, World!', title='Greeting', button='OK')
-    screenWidth, screenHeight = pyautogui.size()
-    print(f"Screen size: {screenWidth}x{screenHeight}")
-
-    margin_x = int(screenWidth * 0.3)
-    margin_top    = int(screenHeight * 0.1)
-    margin_bottom = int(screenHeight * 0.5)
-    region=(margin_x, margin_top, screenWidth - (margin_x * 2), screenHeight - margin_top - margin_bottom)
-    pyautogui.screenshot('my_screenshot.png', region=region)
-    pyautogui.sleep(5)
-
-    # while True:
-    #     mouse = pyautogui.position()
-    #     print(f"Current mouse position: {mouse}")
-    #     if mouse.x > region[0] and mouse.x < region[0] or mouse.y
-    #     pyautogui.sleep(1)  # Wait for 1 second before checking again
-
-    while True:
-        pyautogui.press('9')
-        pyautogui.sleep(1)
-
-        # position = None
-        positions = []
-        while True:
-            try:
-                # position = pyautogui.locateCenterOnScreen('ref_02.png', confidence=0.7, region=region, grayscale=True)
-                found = pyautogui.locateAllOnScreen('ref_01.png', confidence=0.6, region=region, grayscale=False)
-                for position in found:
-                    positions.append(pyautogui.center(position))
-                print("Image found on the screen!")
-                break # TODO
-            except pyautogui.ImageNotFoundException:
-                print("Image not found, checking again...")
-            except pyscreeze.ImageNotFoundException:
-                print("Image not found, checking again...")
-            pyautogui.sleep(1)  # Wait for 1 second before checking again
-
-        print(f"Current mouse position: {pyautogui.position()}")
-        # if position:
-        for position in positions:
-            print(f"Image position: {position}")
-            pyautogui.moveTo(position.x, position.y)
-            # print(f"Current mouse position: {pyautogui.position()}, current found image position: {position}")
-            # pyautogui.rightClick()
-            pyautogui.sleep(1)
-        pyautogui.sleep(3)
 
 class Detector(ABC):
     def __init__(self):
         self.agents = []
-        self.preprocessors = []
+        self.image = None
 
     def add_agent(self, agent):
         self.agents.append(agent)
 
-    def add_preprocessor(self, preprocessor):
-        self.preprocessors.append(preprocessor)
+    def set_margins(self, margin_top=0, margin_bottom=0, margin_left=0, margin_right=0):
+        self.margin_top = margin_top
+        self.margin_bottom = margin_bottom
+        self.margin_left = margin_left
+        self.margin_right = margin_right
+
+    def step(self):
+        image = self.get_image()
+        if image is None:
+            print("No image captured, retrying...")
+            return []
+
+        height, width = image.shape[:2]
+        top = int(height * self.margin_top)
+        bottom = int(height * (1 - self.margin_bottom))
+        left = int(width * self.margin_left)
+        right = int(width * (1 - self.margin_right))
+        image = image[top:bottom, left:right]
+
+        positions = []
+        for agent in self.agents:
+            positions.extend(agent.detect(image))
+
+        for idx, position in enumerate(positions):
+            positions[idx] = (
+                position[0] + left,
+                position[1] + top,
+                position[2] + left,
+                position[3] + top,
+            )
+
+        positions = np.array(positions, dtype=np.int32).reshape(-1, 4)
+        # print(f"Detected positions: {len(positions)}")
+        positions = utils.non_max_suppression(positions, overlapThresh=0.1)
+        # print(f"Cleaning positions: {len(positions)}")
+        return positions
 
     def run(self):
         print("Starting screen detection...")
         # Here you would implement the logic to start the detection process
         while True:
-            image = self.get_image()
-            if image is None:
-                print("No image captured, retrying...")
-                pyautogui.sleep(1)
-                continue
-
-            for preprocessor in self.preprocessors:
-                image = preprocessor.apply(image)
-
-            positions = []
-            for agent in self.agents:
-                positions.extend(agent.detect(image))
-
-            positions = np.array(positions, dtype=np.int32).reshape(-1, 4)
-            # print(f"Detected positions: {len(positions)}")
-            positions = utils.non_max_suppression(positions, overlapThresh=0.1)
-            # print(f"Cleaning positions: {len(positions)}")
-
+            positions = self.step()
             self.found(positions)
             pyautogui.sleep(1)
 
@@ -110,13 +80,11 @@ class ScreenDetector(Detector):
         img = ImageGrab.grab()
         # Convert to numpy array (RGB)
         img_np = np.array(img)
-        # Convert RGB to BGR for OpenCV
-        frame = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-        return frame
+        # Convert RGB to BGR for OpenCV9
+        self.image = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        return self.image
 
     def found(self, positions):
-        if not positions:
-            return False
         # Here you can implement logic to handle found positions
         print(f"Found {len(positions)} positions on the screen.")
         for pos in positions:
@@ -133,27 +101,71 @@ class ImageDetector(Detector):
         return self.image
 
     def found(self, positions):
-        img = self.image.copy()
-        h, w = img.shape[:2]
-        for pt in positions:
-            cv2.rectangle(img, (pt[0], pt[1]), (pt[2], pt[3]), (0,0,255), 1)
-        cv2.imwrite(f'output/ImageDetector-{self.idx}.png', img)
+        utils.save_detection(f'output/ImageDetector-{self.idx:0>3}.png', self.image, positions)
         self.idx += 1
 
 class FishingBot:
-    def __init__(self):
-        pass
+    def __init__(self, detector: Detector):
+        self.detector = detector
+        self.is_cancelled = False
+        keyboard.on_press_key('esc', lambda _: setattr(self, 'is_cancelled', True))
 
-from agents.MatchBest import MatchBest
-from agents.MatchAll import MatchAll
-from preprocessors.Region import Region
+    def start(self):
+        idx = 0
+        pyautogui.sleep(3)  # Wait for 3 seconds before starting
+        prev_position = None
+        while not self.is_cancelled:
+            pyautogui.press('9')
+            pyautogui.sleep(2)
+
+            time = datetime.now()
+            while True:
+                pyautogui.sleep(0.1)
+
+                if (datetime.now() - time).total_seconds() > 30:
+                    break
+
+                positions = detector.step()
+                print(f"Detected positions ({len(positions)}): {positions}")
+                idx += 1
+                utils.save_detection(f'output/detect-{idx:0>3}.png', self.detector.image, positions)
+
+                if len(positions) == 0:
+                    if prev_position is None:
+                        continue
+                    else:
+                        # float disappears
+                        break
+
+                pos = utils.box_center(positions[0])
+                print(f"Selected position: {positions[0]} / {pos}")
+                utils.save_detection(f'output/selected-{idx:0>3}.png', self.detector.image, [positions[0]])
+                if prev_position is None:
+                    prev_position = pos
+                    continue
+
+                if abs(pos[1] - prev_position[1]) > 10 or abs(pos[0] - prev_position[0]) > 10:
+                    # new position found, float has moved
+                    break
+
+            if prev_position is not None:
+                bbox = [prev_position[0] - 10, prev_position[1] - 10, prev_position[0] + 10, prev_position[1] + 10]
+                utils.save_detection(f'output/click-{idx:0>3}.png', self.detector.image, [bbox])
+
+                print(f"Clicking at position: {prev_position}")
+                pyautogui.moveTo(prev_position[0], prev_position[1])
+                pyautogui.rightClick()
 
 if __name__ == "__main__":
-    dir = pathlib.Path(os.path.dirname(__file__))
-    detector = ImageDetector(dir / '../test_images/Screenshot 2025-07-06 214359.png')
-    detector.add_preprocessor(Region(margin_top=0.1, margin_bottom=0.5, margin_left=0.3, margin_right=0.3))
-    detector.add_agent(MatchAll(reference_image=cv2.imread(dir / '../reference_images/ref_04.png', cv2.IMREAD_COLOR_BGR)))
-    detector.run()
+    from agents.MatchBest import MatchBest
+    from agents.MatchAll import MatchAll
 
-    # bot = FishingBot(detector)
-    # bot.start()
+    dir = pathlib.Path(os.path.dirname(__file__))
+    # detector = ImageDetector(dir / '../test_images/Screenshot 2025-07-06 214359.png')
+    detector = ScreenDetector()
+    detector.set_margins(margin_top=0.1, margin_bottom=0.5, margin_left=0.3, margin_right=0.3)
+    detector.add_agent(MatchAll(reference_image=cv2.imread(dir / '../reference_images/ref_04.png', cv2.IMREAD_COLOR_BGR)))
+    # detector.run()
+
+    bot = FishingBot(detector)
+    bot.start()

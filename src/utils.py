@@ -2,8 +2,9 @@
 import numpy as np
 import os
 import importlib
+import cv2
 
-def non_max_suppression(boxes, probs=None, overlapThresh=0.3):
+def non_max_suppression(boxes, overlapThresh=0.3):
 	# if there are no boxes, return an empty list
 	if len(boxes) == 0:
 		return []
@@ -80,3 +81,14 @@ def load_agent(name, kwargs={}):
     except Exception as e:
         print(f"Error loading agent '{name}': {e}")
         return None
+
+def save_detection(filename, image, positions):
+    img = image.copy()
+    h, w = img.shape[:2]
+    for pt in positions:
+        cv2.rectangle(img, (pt[0], pt[1]), (pt[2], pt[3]), (0,0,255), 1)
+    cv2.imwrite(filename, img)
+
+def box_center(bbox):
+		x1, y1, x2, y2 = bbox
+		return (int((x1 + x2) / 2), int((y1 + y2) / 2))
