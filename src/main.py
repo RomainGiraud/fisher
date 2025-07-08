@@ -11,10 +11,14 @@ from datetime import datetime
 
 import utils
 
-class Detector(ABC):
+DEBUG = False
+
+class BobblerDetector(ABC):
     def __init__(self):
         self.agents = []
         self.image = None
+        self.set_margins()
+        self.idx = 0 # for DEBUG
 
     def add_agent(self, agent):
         self.agents.append(agent)
@@ -25,7 +29,7 @@ class Detector(ABC):
         self.margin_left = margin_left
         self.margin_right = margin_right
 
-    def step(self):
+    def detect(self):
         image = self.get_image()
         if image is None:
             print("No image captured, retrying...")
@@ -42,6 +46,10 @@ class Detector(ABC):
         for agent in self.agents:
             positions.extend(agent.detect(image))
 
+        if DEBUG:
+            self.idx += 1
+            utils.save_detection(f'output/partial-{self.idx:0>3}.png', image, positions)
+
         for idx, position in enumerate(positions):
             positions[idx] = (
                 position[0] + left,
@@ -50,28 +58,24 @@ class Detector(ABC):
                 position[3] + top,
             )
 
-        positions = np.array(positions, dtype=np.int32).reshape(-1, 4)
-        # print(f"Detected positions: {len(positions)}")
-        positions = utils.non_max_suppression(positions, overlapThresh=0.1)
-        # print(f"Cleaning positions: {len(positions)}")
-        return positions
+        if DEBUG:
+            utils.save_detection(f'output/global-{self.idx:0>3}.png', self.image, positions)
 
-    def run(self):
-        print("Starting screen detection...")
-        # Here you would implement the logic to start the detection process
-        while True:
-            positions = self.step()
-            self.found(positions)
-            pyautogui.sleep(1)
+        positions = np.array(positions, dtype=np.int32).reshape(-1, 4)
+        nb_positions = len(positions)
+        positions = utils.non_max_suppression(positions, overlapThresh=0.1)
+
+        if DEBUG:
+            print(f"Detected {nb_positions} positions, cleaned to {len(positions)}")
+            utils.save_detection(f'output/best-{self.idx:0>3}.png', self.image, positions)
+
+        return positions
 
     @abstractmethod
     def get_image(self):
         pass
 
-    def found(self, positions):
-        print(f"Detected positions: {len(positions)}")
-
-class ScreenDetector(Detector):
+class ScreenDetector(BobblerDetector):
     def __init__(self):
         super().__init__()
 
@@ -84,14 +88,7 @@ class ScreenDetector(Detector):
         self.image = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
         return self.image
 
-    def found(self, positions):
-        # Here you can implement logic to handle found positions
-        print(f"Found {len(positions)} positions on the screen.")
-        for pos in positions:
-            print(f"Position: {pos}")
-        return True
-
-class ImageDetector(Detector):
+class ImageDetector(BobblerDetector):
     def __init__(self, image_path=None):
         super().__init__()
         self.image = cv2.imread(image_path, cv2.IMREAD_COLOR)
@@ -100,24 +97,20 @@ class ImageDetector(Detector):
     def get_image(self):
         return self.image
 
-    def found(self, positions):
-        utils.save_detection(f'output/ImageDetector-{self.idx:0>3}.png', self.image, positions)
-        self.idx += 1
-
 class FishingBot:
-    def __init__(self, detector: Detector):
+    def __init__(self, detector: BobblerDetector, cancel_key='esc'):
         self.detector = detector
         self.is_cancelled = False
-        keyboard.on_press_key('esc', lambda _: setattr(self, 'is_cancelled', True))
+        keyboard.on_press_key(cancel_key, lambda _: setattr(self, 'is_cancelled', True))
 
     def start(self):
         idx = 0
         pyautogui.sleep(3)  # Wait for 3 seconds before starting
-        prev_position = None
         while not self.is_cancelled:
             pyautogui.press('9')
             pyautogui.sleep(2)
 
+            prev_position = None
             time = datetime.now()
             while True:
                 pyautogui.sleep(0.1)
@@ -125,36 +118,41 @@ class FishingBot:
                 if (datetime.now() - time).total_seconds() > 30:
                     break
 
-                positions = detector.step()
-                print(f"Detected positions ({len(positions)}): {positions}")
-                idx += 1
-                utils.save_detection(f'output/detect-{idx:0>3}.png', self.detector.image, positions)
+                positions = detector.detect()
+                if DEBUG:
+                    print(f"Detected positions ({len(positions)}): {positions}")
+                    idx += 1
+                    utils.save_detection(f'output/detect-{idx:0>3}.png', self.detector.image, positions)
 
                 if len(positions) == 0:
                     if prev_position is None:
                         continue
                     else:
-                        # float disappears
+                        # bobbler disappears
                         break
 
                 pos = utils.box_center(positions[0])
-                print(f"Selected position: {positions[0]} / {pos}")
-                utils.save_detection(f'output/selected-{idx:0>3}.png', self.detector.image, [positions[0]])
+                if DEBUG:
+                    print(f"Selected position: {positions[0]} / {pos}")
+                    utils.save_detection(f'output/selected-{idx:0>3}.png', self.detector.image, [positions[0]])
+
                 if prev_position is None:
                     prev_position = pos
                     continue
 
                 if abs(pos[1] - prev_position[1]) > 10 or abs(pos[0] - prev_position[0]) > 10:
-                    # new position found, float has moved
+                    # new position found, bobbler has moved
                     break
 
             if prev_position is not None:
-                bbox = [prev_position[0] - 10, prev_position[1] - 10, prev_position[0] + 10, prev_position[1] + 10]
-                utils.save_detection(f'output/click-{idx:0>3}.png', self.detector.image, [bbox])
+                if DEBUG:
+                    bbox = [prev_position[0] - 10, prev_position[1] - 10, prev_position[0] + 10, prev_position[1] + 10]
+                    utils.save_detection(f'output/click-{idx:0>3}.png', self.detector.image, [bbox])
+                    print(f"Clicking at position: {prev_position}")
 
-                print(f"Clicking at position: {prev_position}")
                 pyautogui.moveTo(prev_position[0], prev_position[1])
                 pyautogui.rightClick()
+                pyautogui.sleep(4)
 
 if __name__ == "__main__":
     from agents.MatchBest import MatchBest
@@ -165,7 +163,8 @@ if __name__ == "__main__":
     detector = ScreenDetector()
     detector.set_margins(margin_top=0.1, margin_bottom=0.5, margin_left=0.3, margin_right=0.3)
     detector.add_agent(MatchAll(reference_image=cv2.imread(dir / '../reference_images/ref_04.png', cv2.IMREAD_COLOR_BGR)))
-    # detector.run()
+    # positions = detector.detect()
+    # utils.save_detection(f'output/detected.png', detector.image, positions)
 
-    bot = FishingBot(detector)
-    bot.start()
+    # bot = FishingBot(detector)
+    # bot.start()
