@@ -12,6 +12,7 @@ from datetime import datetime
 import utils
 
 DEBUG = False
+AUTOFOCUS = True
 
 class BobblerDetector(ABC):
     def __init__(self):
@@ -101,7 +102,21 @@ class FishingBot:
     def __init__(self, detector: BobblerDetector, cancel_key='esc'):
         self.detector = detector
         self.is_cancelled = False
-        keyboard.on_press_key(cancel_key, lambda _: setattr(self, 'is_cancelled', True))
+        self.handle = None
+
+        def cancel(_):
+            print("Bot cancelled")
+            setattr(self, 'is_cancelled', True)
+        keyboard.on_press_key(cancel_key, lambda _: cancel(_))
+
+        if AUTOFOCUS:
+            # Focus the WoW window
+            handles = pyautogui.getWindowsWithTitle("world of warcraft")
+            if len(handles) > 0:
+                self.handle = handles[0]
+                self.handle.restore()  # Restore the WoW window if minimized
+                self.handle.activate()
+                pyautogui.sleep(1)
 
     def start(self):
         idx = 0
@@ -153,6 +168,13 @@ class FishingBot:
                 pyautogui.moveTo(prev_position[0], prev_position[1])
                 pyautogui.rightClick()
                 pyautogui.sleep(4)
+                pyautogui.moveTo(10, 10)  # Move mouse to a safe position
+        self.on_stop()
+
+    def on_stop(self):
+        if AUTOFOCUS:
+            print("Minimizing WoW window.")
+            self.handle.minimize()  # Minimize the WoW window
 
 if __name__ == "__main__":
     from agents.MatchBest import MatchBest
@@ -166,5 +188,5 @@ if __name__ == "__main__":
     # positions = detector.detect()
     # utils.save_detection(f'output/detected.png', detector.image, positions)
 
-    # bot = FishingBot(detector)
-    # bot.start()
+    bot = FishingBot(detector)
+    bot.start()
