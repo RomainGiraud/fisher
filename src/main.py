@@ -177,16 +177,27 @@ class FishingBot:
             self.handle.minimize()  # Minimize the WoW window
 
 if __name__ == "__main__":
+    # import ultralytics
+    # model = ultralytics.YOLO('best.pt')
+    # image = cv2.imread('test_images/WoWScrnShot_010525_082120_jpg.rf.610636b3ffc626f9b3dd98c734da772a.jpg', cv2.IMREAD_COLOR)
+    # results = model([image])
+    # for result in results:
+    #     if result.boxes:
+    #         print(f"Detected {len(result.boxes)} objects on {result.path}.")
+    # exit()
+
     from agents.MatchBest import MatchBest
     from agents.MatchAll import MatchAll
+    from agents.MatchYolo import MatchYolo
 
     dir = pathlib.Path(os.path.dirname(__file__))
-    # detector = ImageDetector(dir / '../test_images/Screenshot 2025-07-06 214359.png')
-    detector = ScreenDetector()
-    detector.set_margins(margin_top=0.1, margin_bottom=0.5, margin_left=0.3, margin_right=0.3)
-    detector.add_agent(MatchAll(reference_image=cv2.imread(dir / '../reference_images/ref_04.png', cv2.IMREAD_COLOR_BGR)))
-    # positions = detector.detect()
-    # utils.save_detection(f'output/detected.png', detector.image, positions)
+    detector = ImageDetector(str(dir / '../test_images/WoWScrnShot_010525_082120_jpg.rf.610636b3ffc626f9b3dd98c734da772a.jpg'))
+    # detector = ScreenDetector()
+    # detector.set_margins(margin_top=0.1, margin_bottom=0.5, margin_left=0.3, margin_right=0.3)
+    # detector.add_agent(MatchAll(reference_image=cv2.imread(str(dir / '../reference_images/ref_04.png'), cv2.IMREAD_COLOR_BGR)))
+    detector.add_agent(MatchYolo())
+    positions = detector.detect()
+    utils.save_detection(f'output/detected.png', detector.image, positions)
 
-    bot = FishingBot(detector)
-    bot.start()
+    # bot = FishingBot(detector)
+    # bot.start()

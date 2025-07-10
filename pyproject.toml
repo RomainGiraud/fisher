@@ -11,4 +11,5 @@ dependencies = [
     "pillow>=11.3.0",
     "pyautogui>=0.9.54",
     "pyscreeze>=1.0.1",
+    "ultralytics>=8.3.163",
 ]
