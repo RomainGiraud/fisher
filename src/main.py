@@ -13,8 +13,9 @@ import utils
 
 DEBUG = False
 AUTOFOCUS = True
+TESTING = False
 
-class BobblerDetector(ABC):
+class BobberDetector(ABC):
     def __init__(self):
         self.agents = []
         self.image = None
@@ -76,7 +77,7 @@ class BobblerDetector(ABC):
     def get_image(self):
         pass
 
-class ScreenDetector(BobblerDetector):
+class ScreenDetector(BobberDetector):
     def __init__(self):
         super().__init__()
 
@@ -89,7 +90,7 @@ class ScreenDetector(BobblerDetector):
         self.image = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
         return self.image
 
-class ImageDetector(BobblerDetector):
+class ImageDetector(BobberDetector):
     def __init__(self, image_path=None):
         super().__init__()
         self.image = cv2.imread(image_path, cv2.IMREAD_COLOR)
@@ -99,7 +100,7 @@ class ImageDetector(BobblerDetector):
         return self.image
 
 class FishingBot:
-    def __init__(self, detector: BobblerDetector, cancel_key='esc'):
+    def __init__(self, detector: BobberDetector, cancel_key='esc'):
         self.detector = detector
         self.is_cancelled = False
         self.handle = None
@@ -143,7 +144,7 @@ class FishingBot:
                     if prev_position is None:
                         continue
                     else:
-                        # bobbler disappears
+                        # bobber disappears
                         break
 
                 pos = utils.box_center(positions[0])
@@ -156,7 +157,7 @@ class FishingBot:
                     continue
 
                 if abs(pos[1] - prev_position[1]) > 10 or abs(pos[0] - prev_position[0]) > 10:
-                    # new position found, bobbler has moved
+                    # new position found, bobber has moved
                     break
 
             if prev_position is not None:
@@ -177,27 +178,23 @@ class FishingBot:
             self.handle.minimize()  # Minimize the WoW window
 
 if __name__ == "__main__":
-    # import ultralytics
-    # model = ultralytics.YOLO('best.pt')
-    # image = cv2.imread('test_images/WoWScrnShot_010525_082120_jpg.rf.610636b3ffc626f9b3dd98c734da772a.jpg', cv2.IMREAD_COLOR)
-    # results = model([image])
-    # for result in results:
-    #     if result.boxes:
-    #         print(f"Detected {len(result.boxes)} objects on {result.path}.")
-    # exit()
-
     from agents.MatchBest import MatchBest
     from agents.MatchAll import MatchAll
     from agents.MatchYolo import MatchYolo
 
-    dir = pathlib.Path(os.path.dirname(__file__))
-    detector = ImageDetector(str(dir / '../test_images/WoWScrnShot_010525_082120_jpg.rf.610636b3ffc626f9b3dd98c734da772a.jpg'))
-    # detector = ScreenDetector()
-    # detector.set_margins(margin_top=0.1, margin_bottom=0.5, margin_left=0.3, margin_right=0.3)
-    # detector.add_agent(MatchAll(reference_image=cv2.imread(str(dir / '../reference_images/ref_04.png'), cv2.IMREAD_COLOR_BGR)))
-    detector.add_agent(MatchYolo())
-    positions = detector.detect()
-    utils.save_detection(f'output/detected.png', detector.image, positions)
-
-    # bot = FishingBot(detector)
-    # bot.start()
+    if TESTING:
+        dir = pathlib.Path(os.path.dirname(__file__))
+        for file in dir.glob('../test_images/*'):
+            detector = ImageDetector(str(file))
+            detector.set_margins(margin_top=0.1, margin_bottom=0.4, margin_left=0.2, margin_right=0.2)
+            # detector.add_agent(MatchAll(reference_image=cv2.imread(str(dir / '../reference_images/ref_04.png'), cv2.IMREAD_COLOR_BGR)))
+            detector.add_agent(MatchYolo('models/best.pt'))
+            positions = detector.detect()
+            utils.save_detection(f'output/detected-{file.stem}.png', detector.image, positions)
+    else:
+        detector = ScreenDetector()
+        detector.set_margins(margin_top=0.1, margin_bottom=0.4, margin_left=0.2, margin_right=0.2)
+        # detector.add_agent(MatchAll(reference_image=cv2.imread(str(dir / '../reference_images/ref_04.png'), cv2.IMREAD_COLOR_BGR)))
+        detector.add_agent(MatchYolo('models/best.pt'))
+        bot = FishingBot(detector)
+        bot.start()

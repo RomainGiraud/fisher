@@ -1,10 +1,11 @@
 [project]
-name = "fishing-bot"
+name = "fisher"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "albumentations>=2.0.8",
     "keyboard>=0.13.5",
     "matplotlib>=3.10.3",
     "opencv-python>=4.11.0.86",
@@ -12,4 +13,5 @@ dependencies = [
     "pyautogui>=0.9.54",
     "pyscreeze>=1.0.1",
     "ultralytics>=8.3.163",
+    "label-studio>=1.20.0",
 ]
