@@ -48,6 +48,15 @@ uv run yolo train model=yolo11n.pt data=dataset/3\ -\ final/data.yaml epochs=100
 
 You just have to move the new model from `runs` folder to `models/best-fisher.pt`.
 
+To anonymize your data:
+```bash
+for i in *.jpg;
+do
+  magick $i -fill black -draw 'rectangle 10,10 %[fx:w*0.15],%[fx:h*0.1]' output.jpg;
+  mv output.jpg $i;
+done
+```
+
 ## Disclaimer
 
 This project is for educational purposes only. Automating gameplay violates the terms of service. Use at your own risk.
