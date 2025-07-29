@@ -115,7 +115,8 @@ class FishingBot:
             handles = pyautogui.getWindowsWithTitle("world of warcraft")
             if len(handles) > 0:
                 self.handle = handles[0]
-                self.handle.restore()  # Restore the WoW window if minimized
+                print(f"Found WoW window: {self.handle.title}")
+                self.handle.restore() # Restore the WoW window if minimized
                 self.handle.activate()
                 pyautogui.sleep(1)
 
@@ -129,7 +130,7 @@ class FishingBot:
             prev_position = None
             time = datetime.now()
             while True:
-                pyautogui.sleep(0.1)
+                pyautogui.sleep(0.02)
 
                 if (datetime.now() - time).total_seconds() > 30:
                     break
@@ -147,7 +148,7 @@ class FishingBot:
                         # bobber disappears
                         break
 
-                pos = utils.box_center(positions[0])
+                pos, size = utils.box_center(positions[0])
                 if DEBUG:
                     print(f"Selected position: {positions[0]} / {pos}")
                     utils.save_detection(f'output/selected-{idx:0>3}.png', self.detector.image, [positions[0]])
@@ -158,7 +159,15 @@ class FishingBot:
 
                 if abs(pos[1] - prev_position[1]) > 10 or abs(pos[0] - prev_position[0]) > 10:
                     # new position found, bobber has moved
+                    # print(f"Bobber moved to {pos}, previous was {prev_position}")
                     break
+
+                if size[0] < size[1]:
+                    percent = size[0] / size[1]
+                    if percent > 0.1:
+                        # fish is hooked
+                        # print(f"Moving bobber was detected, clicking at {pos}")
+                        break
 
             if prev_position is not None:
                 if DEBUG:

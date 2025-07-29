@@ -9,7 +9,7 @@ class MatchYolo:
 
     def detect(self, image):
         positions = []
-        results = self.model([image])
+        results = self.model.predict(source=image, conf=0.5, save=False, verbose=False)
         result = results[0]
         if result.boxes:
             # print(f"Detected {len(result.boxes)} objects.")

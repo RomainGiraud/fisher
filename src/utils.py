@@ -99,4 +99,4 @@ def save_detection(filename, image, positions):
 
 def box_center(bbox):
     x1, y1, x2, y2 = bbox
-    return (int((x1 + x2) / 2), int((y1 + y2) / 2))
+    return (int((x1 + x2) / 2), int((y1 + y2) / 2)), (abs(x2 - x1), abs(y2 - y1))
